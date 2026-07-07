@@ -411,9 +411,36 @@ func emptyDash(value string) string {
 func printHelp() {
 	fmt.Println(`javahome ` + version + `
 
-A small, dependency-free Java home switcher for Linux, macOS, and Windows.
+Switch Java versions without fragile shell hacks.
 
 Usage:
+  javahome <command> [options]
+
+Most useful commands:
+  javahome list                         List discovered JDKs
+  javahome current                      Show active JAVA_HOME
+  javahome doctor                       Diagnose JAVA_HOME, java, javac, and discovery
+  javahome print 17                     Print the path for Java 17
+  javahome use 17                       Show activation instructions for your shell
+
+Current-shell activation:
+  eval "$(javahome use 17 --shell bash)"
+  eval "$(javahome use 17 --shell zsh)"
+  javahome use 17 --shell fish | source
+  javahome use 17 --shell powershell | Invoke-Expression
+
+Permanent profile update:
+  javahome use 17 --global --shell bash
+  javahome use 17 --global --shell zsh
+  javahome use 17 --global --shell fish
+  javahome use 17 --global --shell powershell
+
+Project and automation:
+  javahome use 17 --project             Write .javahome.toml
+  javahome list --json                  JSON output for scripts
+  javahome use 17 --global --dry-run    Preview profile changes
+
+All commands:
   javahome list [--json]
   javahome current [--json]
   javahome print [version] [--vendor text] [--json]
@@ -422,16 +449,10 @@ Usage:
   javahome use <version> --project
   javahome doctor [--json]
   javahome init [bash|zsh|fish|powershell] [--global]
-
-Examples:
-  javahome list
-  javahome current
-  javahome print 17
-  eval "$(javahome use 17 --shell bash)"
-  javahome use 21 --global --shell zsh
-  javahome init bash --global
+  javahome version
 
 Notes:
   An external process cannot directly change the already-running parent shell.
-  Use eval/source/Invoke-Expression for current-shell activation, or --global for profile updates.`)
+  Use eval/source/Invoke-Expression for current-shell activation, or --global
+  for profile updates.`)
 }
