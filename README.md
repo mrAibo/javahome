@@ -22,6 +22,7 @@ It helps you answer three everyday questions:
 - stale Java `bin` entries removed from generated `PATH`
 - JSON output for scripts and automation
 - safe preview mode with `--dry-run`
+- colored terminal output with automatic fallback for scripts and pipes
 
 ## Quick start
 
@@ -226,6 +227,20 @@ javahome init zsh --global
 javahome init fish --global
 javahome init powershell --global
 ```
+
+## Console colors
+
+`javahome` uses ANSI colors when output goes to a supported terminal. It stays plain when output is redirected, JSON is requested, or command output is meant to be evaluated by a shell.
+
+Control color behavior with environment variables:
+
+```bash
+NO_COLOR=1 javahome doctor
+JAVAHOME_COLOR=never javahome list
+JAVAHOME_COLOR=always javahome doctor
+```
+
+Shell snippets from `javahome use <version> --shell ...` are never colorized, so commands like `eval "$(javahome use 17 --shell bash)"` remain safe.
 
 ## Commands
 
