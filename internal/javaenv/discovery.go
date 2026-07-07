@@ -64,6 +64,10 @@ func Discover() []Installation {
 		add(JavaHomeFromBinary(javaPath), "PATH")
 	}
 
+	for path, source := range nativeCandidates() {
+		add(normalizeCandidate(path), source)
+	}
+
 	for _, pattern := range discoveryPatterns() {
 		matches, _ := filepath.Glob(expandPlatformEnv(pattern))
 		for _, match := range matches {
