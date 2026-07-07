@@ -2,21 +2,22 @@
 
 Ideas that would make `javahome` even more user-friendly.
 
-## High-impact improvements
+## Implemented in 0.3.0
 
-1. Interactive selection
+- `javahome select` numbered interactive selection
+- `javahome activate` for `.javahome.toml`
+- Bash/Zsh/Fish/PowerShell completion generation
+- native discovery hooks for macOS, Linux, and Windows
+- GitHub release workflow for tagged releases
+- SDKMAN/jEnv/asdf/mise conflict hints in `doctor`
 
-   Add `javahome select` to show discovered JDKs and let the user choose one with arrow keys. This would be useful for humans, while the existing commands remain best for scripts.
+## Remaining high-impact improvements
 
-2. Shell completions
+1. Arrow-key interactive selection
 
-   Generate completions for Bash, Zsh, Fish, and PowerShell. This would make commands and flags easier to discover.
+   Upgrade `javahome select` from numbered prompts to true arrow-key navigation while keeping the numbered fallback.
 
-3. Release workflow
-
-   Add a GitHub release workflow that builds binaries for Linux, macOS, and Windows whenever a tag such as `v0.2.0` is pushed.
-
-4. Better native discovery
+2. Better native discovery
 
    Add deeper integration with platform-native mechanisms:
 
@@ -24,17 +25,13 @@ Ideas that would make `javahome` even more user-friendly.
    - Linux `update-alternatives` and `update-java-alternatives`
    - Windows Registry entries for JDK vendors
 
-5. Safer profile backup
+3. Safer profile backup
 
    Before `--global` modifies a profile, create a timestamped backup such as `.bashrc.javahome-backup-YYYYMMDD-HHMMSS`.
 
-6. Apply project config
+4. Better conflict remediation
 
-   Add `javahome activate` to read `.javahome.toml` and emit the correct shell activation snippet.
-
-7. Better conflict detection
-
-   Make `javahome doctor` detect SDKMAN, jEnv, asdf, and mise when they appear to override `JAVA_HOME` or `PATH` after `javahome`.
+   Add exact suggestions when SDKMAN, jEnv, asdf, or mise appear after `javahome` in profile files.
 
 ## Nice-to-have improvements
 
