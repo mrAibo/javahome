@@ -15,13 +15,15 @@ import (
 
 	"github.com/mrAibo/javahome/internal/javaenv"
 	"github.com/mrAibo/javahome/internal/shellenv"
+	"github.com/mrAibo/javahome/internal/termui"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		ui := termui.New(os.Stderr)
+		fmt.Fprintf(os.Stderr, "%s %v\n", ui.Error("error:"), err)
 		os.Exit(1)
 	}
 }
@@ -67,10 +69,16 @@ func cmdList(args []string) error {
 	if *jsonOut {
 		return printJSON(installs)
 	}
+
+	ui := termui.New(os.Stdout)
 	if len(installs) == 0 {
-		fmt.Println("No Java installations found.")
+		fmt.Println(ui.Warning("No Java installations found."))
+		fmt.Println(ui.Bullet("Install a JDK or run `javahome doctor` for diagnostics."))
 		return nil
 	}
+
+	fmt.Println(ui.Bold("Discovered Java installations"))
+	fmt.Println()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "CURRENT\tMAJOR\tVERSION\tVENDOR\tSOURCE\tPATH")
@@ -96,7 +104,9 @@ func cmdCurrent(args []string) error {
 		if *jsonOut {
 			return printJSON(map[string]any{"java_home": "", "valid": false})
 		}
-		fmt.Println("JAVA_HOME is not set.")
+		ui := termui.New(os.Stdout)
+		fmt.Println(ui.Warning("JAVA_HOME is not set."))
+		fmt.Println(ui.Bullet("Run `javahome list`, then activate a version with `javahome use <version>`."))
 		return nil
 	}
 
@@ -108,14 +118,16 @@ func cmdCurrent(args []string) error {
 		return printJSON(map[string]any{"java_home": javaHome, "valid": false})
 	}
 
+	ui := termui.New(os.Stdout)
 	if !ok {
-		fmt.Printf("JAVA_HOME=%s\n", javaHome)
-		fmt.Println("Status: invalid Java home")
+		fmt.Printf("%s=%s\n", ui.Key("JAVA_HOME"), javaHome)
+		fmt.Printf("%s %s\n", ui.Warning("Status:"), "invalid Java home")
 		return nil
 	}
-	fmt.Printf("JAVA_HOME=%s\n", inst.Path)
-	fmt.Printf("Version: %s\n", emptyDash(inst.Version))
-	fmt.Printf("Vendor:  %s\n", emptyDash(inst.Vendor))
+	fmt.Printf("%s=%s\n", ui.Key("JAVA_HOME"), ui.Path(inst.Path))
+	fmt.Printf("%s %s\n", ui.Key("Version:"), emptyDash(inst.Version))
+	fmt.Printf("%s  %s\n", ui.Key("Vendor:"), emptyDash(inst.Vendor))
+	fmt.Printf("%s %s\n", ui.Key("Status:"), ui.Success("valid"))
 	return nil
 }
 
@@ -174,7 +186,12 @@ func cmdUse(args []string) error {
 			fmt.Print(content)
 			return nil
 		}
-		return os.WriteFile(".javahome.toml", []byte(content), 0o644)
+		if err := os.WriteFile(".javahome.toml", []byte(content), 0o644); err != nil {
+			return err
+		}
+		ui := termui.New(os.Stdout)
+		fmt.Printf("%s Wrote %s for Java %d\n", ui.Success("OK"), ui.Path(".javahome.toml"), inst.Major)
+		return nil
 	}
 
 	if *global {
@@ -184,27 +201,31 @@ func cmdUse(args []string) error {
 		}
 		block := "# >>> javahome >>>\n" + strings.TrimRight(script, "\n") + "\n# <<< javahome <<<\n"
 		if *dryRun {
-			fmt.Printf("Would update %s with:\n\n%s", path, block)
+			ui := termui.New(os.Stdout)
+			fmt.Printf("%s %s with:\n\n%s", ui.Warning("Would update"), ui.Path(path), block)
 			return nil
 		}
 		if err := shellenv.UpsertMarkedBlock(path, block); err != nil {
 			return err
 		}
-		fmt.Printf("Updated %s\n", path)
-		fmt.Println("Open a new shell or reload your profile to apply the change.")
+		ui := termui.New(os.Stdout)
+		fmt.Printf("%s Updated %s\n", ui.Success("OK"), ui.Path(path))
+		fmt.Println(ui.Bullet("Open a new shell or reload your profile to apply the change."))
 		return nil
 	}
 
 	if *shellName != "" {
+		// This output is intended to be evaluated by a shell. Never add color here.
 		fmt.Print(script)
 		return nil
 	}
 
-	fmt.Printf("Selected Java %s: %s\n", strconv.Itoa(inst.Major), inst.Path)
+	ui := termui.New(os.Stdout)
+	fmt.Printf("%s Selected Java %s: %s\n", ui.Success("OK"), strconv.Itoa(inst.Major), ui.Path(inst.Path))
 	fmt.Println()
-	fmt.Printf("For the current shell, run:\n  eval \"$(javahome use %s --shell %s)\"\n", versionArg, shell)
+	fmt.Printf("%s\n  %s\n", ui.Bold("For the current shell, run:"), ui.Command(fmt.Sprintf("eval \"$(javahome use %s --shell %s)\"", versionArg, shell)))
 	fmt.Println()
-	fmt.Printf("To make it permanent, run:\n  javahome use %s --global --shell %s\n", versionArg, shell)
+	fmt.Printf("%s\n  %s\n", ui.Bold("To make it permanent, run:"), ui.Command(fmt.Sprintf("javahome use %s --global --shell %s", versionArg, shell)))
 	return nil
 }
 
@@ -256,12 +277,15 @@ func cmdDoctor(args []string) error {
 	if *jsonOut {
 		return printJSON(checks)
 	}
+	ui := termui.New(os.Stdout)
+	fmt.Println(ui.Bold("javahome doctor"))
+	fmt.Println()
 	for _, check := range checks {
-		mark := "OK "
-		if !check.OK {
-			mark = "WARN"
+		mark := "WARN"
+		if check.OK {
+			mark = "OK"
 		}
-		fmt.Printf("%-5s %-12s %s\n", mark, check.Name, check.Message)
+		fmt.Printf("%s%s %-12s %s\n", ui.Check(check.OK), strings.Repeat(" ", 5-len(mark)), check.Name, check.Message)
 	}
 	return nil
 }
@@ -288,13 +312,15 @@ func cmdInit(args []string) error {
 			return err
 		}
 		if *dryRun {
-			fmt.Printf("Would update %s with:\n\n%s", path, script)
+			ui := termui.New(os.Stdout)
+			fmt.Printf("%s %s with:\n\n%s", ui.Warning("Would update"), ui.Path(path), script)
 			return nil
 		}
 		if err := shellenv.UpsertMarkedBlock(path, script); err != nil {
 			return err
 		}
-		fmt.Printf("Updated %s\n", path)
+		ui := termui.New(os.Stdout)
+		fmt.Printf("%s Updated %s\n", ui.Success("OK"), ui.Path(path))
 		return nil
 	}
 	fmt.Print(script)
@@ -408,51 +434,62 @@ func emptyDash(value string) string {
 	return value
 }
 
+func printHelpCommand(ui termui.UI, command string, description string) {
+	spaces := 38 - len(command)
+	if spaces < 1 {
+		spaces = 1
+	}
+	fmt.Printf("  %s%s %s\n", ui.Command(command), strings.Repeat(" ", spaces), description)
+}
+
 func printHelp() {
-	fmt.Println(`javahome ` + version + `
-
-Switch Java versions without fragile shell hacks.
-
-Usage:
-  javahome <command> [options]
-
-Most useful commands:
-  javahome list                         List discovered JDKs
-  javahome current                      Show active JAVA_HOME
-  javahome doctor                       Diagnose JAVA_HOME, java, javac, and discovery
-  javahome print 17                     Print the path for Java 17
-  javahome use 17                       Show activation instructions for your shell
-
-Current-shell activation:
-  eval "$(javahome use 17 --shell bash)"
-  eval "$(javahome use 17 --shell zsh)"
-  javahome use 17 --shell fish | source
-  javahome use 17 --shell powershell | Invoke-Expression
-
-Permanent profile update:
-  javahome use 17 --global --shell bash
-  javahome use 17 --global --shell zsh
-  javahome use 17 --global --shell fish
-  javahome use 17 --global --shell powershell
-
-Project and automation:
-  javahome use 17 --project             Write .javahome.toml
-  javahome list --json                  JSON output for scripts
-  javahome use 17 --global --dry-run    Preview profile changes
-
-All commands:
-  javahome list [--json]
-  javahome current [--json]
-  javahome print [version] [--vendor text] [--json]
-  javahome use <version> [--vendor text] [--shell bash|zsh|fish|powershell|cmd]
-  javahome use <version> --global [--shell bash|zsh|fish|powershell]
-  javahome use <version> --project
-  javahome doctor [--json]
-  javahome init [bash|zsh|fish|powershell] [--global]
-  javahome version
-
-Notes:
-  An external process cannot directly change the already-running parent shell.
-  Use eval/source/Invoke-Expression for current-shell activation, or --global
-  for profile updates.`)
+	ui := termui.New(os.Stdout)
+	fmt.Println(ui.Bold("javahome "+version) + " - " + ui.Cyan("switch Java versions without fragile shell hacks"))
+	fmt.Println()
+	fmt.Println(ui.Bold("Usage:"))
+	fmt.Println("  javahome <command> [options]")
+	fmt.Println()
+	fmt.Println(ui.Bold("Most useful commands:"))
+	printHelpCommand(ui, "javahome list", "List discovered JDKs")
+	printHelpCommand(ui, "javahome current", "Show active JAVA_HOME")
+	printHelpCommand(ui, "javahome doctor", "Diagnose JAVA_HOME, java, javac, and discovery")
+	printHelpCommand(ui, "javahome print 17", "Print the path for Java 17")
+	printHelpCommand(ui, "javahome use 17", "Show activation instructions for your shell")
+	fmt.Println()
+	fmt.Println(ui.Bold("Current-shell activation:"))
+	fmt.Println("  " + ui.Command(`eval "$(javahome use 17 --shell bash)"`))
+	fmt.Println("  " + ui.Command(`eval "$(javahome use 17 --shell zsh)"`))
+	fmt.Println("  " + ui.Command("javahome use 17 --shell fish | source"))
+	fmt.Println("  " + ui.Command("javahome use 17 --shell powershell | Invoke-Expression"))
+	fmt.Println()
+	fmt.Println(ui.Bold("Permanent profile update:"))
+	fmt.Println("  " + ui.Command("javahome use 17 --global --shell bash"))
+	fmt.Println("  " + ui.Command("javahome use 17 --global --shell zsh"))
+	fmt.Println("  " + ui.Command("javahome use 17 --global --shell fish"))
+	fmt.Println("  " + ui.Command("javahome use 17 --global --shell powershell"))
+	fmt.Println()
+	fmt.Println(ui.Bold("Project and automation:"))
+	printHelpCommand(ui, "javahome use 17 --project", "Write .javahome.toml")
+	printHelpCommand(ui, "javahome list --json", "JSON output for scripts")
+	printHelpCommand(ui, "javahome use 17 --global --dry-run", "Preview profile changes")
+	fmt.Println()
+	fmt.Println(ui.Bold("All commands:"))
+	fmt.Println("  javahome list [--json]")
+	fmt.Println("  javahome current [--json]")
+	fmt.Println("  javahome print [version] [--vendor text] [--json]")
+	fmt.Println("  javahome use <version> [--vendor text] [--shell bash|zsh|fish|powershell|cmd]")
+	fmt.Println("  javahome use <version> --global [--shell bash|zsh|fish|powershell]")
+	fmt.Println("  javahome use <version> --project")
+	fmt.Println("  javahome doctor [--json]")
+	fmt.Println("  javahome init [bash|zsh|fish|powershell] [--global]")
+	fmt.Println("  javahome version")
+	fmt.Println()
+	fmt.Println(ui.Bold("Color:"))
+	fmt.Println("  Auto-enabled for supported terminals. Disable with NO_COLOR=1 or JAVAHOME_COLOR=never.")
+	fmt.Println("  Force colors with JAVAHOME_COLOR=always.")
+	fmt.Println()
+	fmt.Println(ui.Bold("Notes:"))
+	fmt.Println("  An external process cannot directly change the already-running parent shell.")
+	fmt.Println("  Use eval/source/Invoke-Expression for current-shell activation, or --global")
+	fmt.Println("  for profile updates.")
 }
