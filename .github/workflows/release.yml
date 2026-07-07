@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build release binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build binaries
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          platforms='linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64'
+          for platform in $platforms; do
+            os="${platform%/*}"
+            arch="${platform#*/}"
+            ext=""
+            if [ "$os" = "windows" ]; then ext=".exe"; fi
+            out="dist/javahome-${os}-${arch}${ext}"
+            GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o "$out" ./cmd/javahome
+          done
+          cd dist
+          sha256sum * > checksums.txt
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "javahome ${GITHUB_REF_NAME}" \
+            --notes "Automated javahome release for ${GITHUB_REF_NAME}."
