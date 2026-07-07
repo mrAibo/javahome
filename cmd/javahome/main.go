@@ -18,7 +18,7 @@ import (
 	"github.com/mrAibo/javahome/internal/termui"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -43,6 +43,12 @@ func run(args []string) error {
 		return cmdPrint(args[1:])
 	case "use":
 		return cmdUse(args[1:])
+	case "select":
+		return cmdSelect(args[1:])
+	case "activate":
+		return cmdActivate(args[1:])
+	case "completion", "completions":
+		return cmdCompletion(args[1:])
 	case "doctor":
 		return cmdDoctor(args[1:])
 	case "init":
@@ -274,6 +280,13 @@ func cmdDoctor(args []string) error {
 		checks = append(checks, Check{"discovery", false, "no Java installations found"})
 	}
 
+	for _, manager := range javaenv.DetectManagers(os.Getenv("PATH")) {
+		if !manager.Found {
+			continue
+		}
+		checks = append(checks, Check{"manager:" + manager.Name, !manager.Active, manager.Message})
+	}
+
 	if *jsonOut {
 		return printJSON(checks)
 	}
@@ -455,6 +468,8 @@ func printHelp() {
 	printHelpCommand(ui, "javahome doctor", "Diagnose JAVA_HOME, java, javac, and discovery")
 	printHelpCommand(ui, "javahome print 17", "Print the path for Java 17")
 	printHelpCommand(ui, "javahome use 17", "Show activation instructions for your shell")
+	printHelpCommand(ui, "javahome select", "Choose a JDK interactively")
+	printHelpCommand(ui, "javahome activate", "Use .javahome.toml in this project")
 	fmt.Println()
 	fmt.Println(ui.Bold("Current-shell activation:"))
 	fmt.Println("  " + ui.Command(`eval "$(javahome use 17 --shell bash)"`))
@@ -470,6 +485,7 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println(ui.Bold("Project and automation:"))
 	printHelpCommand(ui, "javahome use 17 --project", "Write .javahome.toml")
+	printHelpCommand(ui, "javahome activate --shell bash", "Emit project activation snippet")
 	printHelpCommand(ui, "javahome list --json", "JSON output for scripts")
 	printHelpCommand(ui, "javahome use 17 --global --dry-run", "Preview profile changes")
 	fmt.Println()
@@ -480,6 +496,9 @@ func printHelp() {
 	fmt.Println("  javahome use <version> [--vendor text] [--shell bash|zsh|fish|powershell|cmd]")
 	fmt.Println("  javahome use <version> --global [--shell bash|zsh|fish|powershell]")
 	fmt.Println("  javahome use <version> --project")
+	fmt.Println("  javahome select [--vendor text] [--shell name] [--global|--project]")
+	fmt.Println("  javahome activate [--file .javahome.toml] [--shell name|--global]")
+	fmt.Println("  javahome completion bash|zsh|fish|powershell")
 	fmt.Println("  javahome doctor [--json]")
 	fmt.Println("  javahome init [bash|zsh|fish|powershell] [--global]")
 	fmt.Println("  javahome version")
