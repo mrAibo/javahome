@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with these commands:
+Run these commands first:
 
 ```bash
 javahome doctor
@@ -8,30 +8,50 @@ javahome list
 javahome current
 ```
 
-They show whether `JAVA_HOME` is set, whether it points to a valid JDK, whether `java` and `javac` exist, and how many installations were discovered.
+They tell you whether `JAVA_HOME` is set, whether it points to a valid JDK, whether `java` and `javac` exist, and how many installations were discovered.
 
-## No Java installations found
+## `No Java installations found`
 
-Install a full JDK or move it into a common location scanned by `javahome`.
+`javahome` could not find a JDK in known locations.
 
-Common locations include:
+Check whether Java exists at all:
 
-- Linux: `/usr/lib/jvm`, `/usr/java`, `/opt/java`, `/opt/jdk*`
-- macOS: `/Library/Java/JavaVirtualMachines`
-- Windows: `C:\Program Files\Java`, `C:\Program Files\Eclipse Adoptium`, `%USERPROFILE%\.jdks`
-- SDKMAN: `~/.sdkman/candidates/java`
-- asdf: `~/.asdf/installs/java`
-- mise: `~/.local/share/mise/installs/java`
+```bash
+java -version
+javac -version
+```
 
-## JAVA_HOME is not set
+Then check common locations:
 
-Temporary fix for Bash:
+Linux:
+
+```bash
+ls -la /usr/lib/jvm /usr/java /opt/java /opt 2>/dev/null
+```
+
+macOS:
+
+```bash
+ls -la /Library/Java/JavaVirtualMachines 2>/dev/null
+```
+
+Windows PowerShell:
+
+```powershell
+Get-ChildItem 'C:\Program Files\Java' -ErrorAction SilentlyContinue
+Get-ChildItem 'C:\Program Files\Eclipse Adoptium' -ErrorAction SilentlyContinue
+Get-ChildItem "$env:USERPROFILE\.jdks" -ErrorAction SilentlyContinue
+```
+
+## `JAVA_HOME is not set`
+
+Temporary fix for the current shell:
 
 ```bash
 eval "$(javahome use 17 --shell bash)"
 ```
 
-Permanent Bash default:
+Permanent fix for future Bash shells:
 
 ```bash
 javahome use 17 --global --shell bash
@@ -40,60 +60,102 @@ source ~/.bashrc
 
 Use the correct shell name for your environment: `bash`, `zsh`, `fish`, or `powershell`.
 
-## javac not found
+## `javac not found`
 
 This usually means you selected a JRE instead of a full JDK.
 
-Run:
+Check:
 
 ```bash
 javahome current
-javahome list
+javac -version
 ```
 
-Then select a full JDK:
+Install or select a full JDK, then run:
 
 ```bash
+javahome list
 javahome use 17 --global --shell bash
 ```
 
-## java -version still shows the old version
+## `java -version` still shows the old version
 
-Reload your profile or open a new terminal.
+The current terminal probably did not load the generated environment yet.
 
-For Bash:
+For current shell activation:
+
+```bash
+eval "$(javahome use 17 --shell bash)"
+```
+
+For permanent activation:
 
 ```bash
 source ~/.bashrc
 ```
 
-For Zsh:
+or open a new terminal window.
 
-```zsh
-source ~/.zshrc
-```
+Also check that no other version manager is rewriting `PATH` after `javahome`, such as SDKMAN, jEnv, asdf, or mise.
 
-For Fish:
+## I use SDKMAN, jEnv, asdf, or mise
 
-```fish
-source ~/.config/fish/config.fish
-```
-
-For PowerShell, open a new window or reload your profile.
-
-## Other Java version managers
-
-SDKMAN, jEnv, asdf, and mise can also modify `JAVA_HOME` and `PATH`.
+`javahome` can still discover installations from common SDKMAN/asdf/mise locations, but it does not try to replace those tools.
 
 Recommended approach:
 
-- use only one tool to modify Java in a given shell profile
-- put `javahome` after other Java tools if you want `javahome` to win
-- use `javahome print <version>` in scripts if you only need a path
+- use SDKMAN/jEnv/asdf/mise when you want their full ecosystem
+- use `javahome` when you want a small, dependency-free binary that prints or activates a JDK path
+- avoid having multiple tools modify `JAVA_HOME` in the same shell profile unless you know the order
 
-## Preview profile changes
+## PowerShell profile did not reload
 
-Always preview global changes first when in doubt:
+Run:
+
+```powershell
+$PROFILE
+Test-Path $PROFILE
+. $PROFILE
+```
+
+If execution policy blocks profile loading, open a new PowerShell window or follow your organization's policy for PowerShell profile execution.
+
+## CMD limitations
+
+CMD cannot safely evaluate multi-line command output like Bash or PowerShell.
+
+Use:
+
+```cmd
+javahome use 17 --shell cmd
+```
+
+Then paste the printed `set JAVA_HOME=...` and `set PATH=...` lines into the same CMD window.
+
+For scripts, prefer PowerShell.
+
+## Disable or force color output
+
+Colors are automatic in supported terminals and disabled for redirected output.
+
+Disable colors:
+
+```bash
+NO_COLOR=1 javahome doctor
+JAVAHOME_COLOR=never javahome list
+```
+
+Force colors, useful for demos or screenshots:
+
+```bash
+JAVAHOME_COLOR=always javahome doctor
+```
+
+Shell activation output is never colorized when generated with `--shell`, because it must remain safe for `eval`, `source`, or `Invoke-Expression`.
+
+## Profile file looks wrong
+
+Preview before writing:
 
 ```bash
 javahome use 17 --global --shell bash --dry-run
