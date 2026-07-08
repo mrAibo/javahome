@@ -149,7 +149,6 @@ func applyInstallation(inst javaenv.Installation, versionArg string, vendor stri
 	}
 
 	if shellName != "" {
-		// This output is intended to be evaluated by a shell. Never add color here.
 		fmt.Print(script)
 		return nil
 	}
@@ -248,16 +247,17 @@ func bashCompletion() string {
 	return `_javahome_complete() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   local prev="${COMP_WORDS[COMP_CWORD-1]}"
-  local commands="list ls current print use select activate doctor init completion version help"
+  local commands="list ls current print use select activate setup wizard uninstall windows-env winenv doctor init completion version help"
   local shells="bash zsh fish powershell cmd"
   case "$prev" in
     --shell|init|completion) COMPREPLY=( $(compgen -W "$shells" -- "$cur") ); return ;;
+    windows-env|winenv) COMPREPLY=( $(compgen -W "user machine" -- "$cur") ); return ;;
     --vendor) COMPREPLY=(); return ;;
   esac
   if [[ $COMP_CWORD -eq 1 ]]; then
     COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
   else
-    COMPREPLY=( $(compgen -W "--json --vendor --shell --global --project --dry-run --file" -- "$cur") )
+    COMPREPLY=( $(compgen -W "--json --vendor --shell --global --project --dry-run --file --all" -- "$cur") )
   fi
 }
 complete -F _javahome_complete javahome
@@ -267,26 +267,30 @@ complete -F _javahome_complete javahome
 func zshCompletion() string {
 	return `#compdef javahome
 _arguments \
-  '1:command:(list ls current print use select activate doctor init completion version help)' \
+  '1:command:(list ls current print use select activate setup wizard uninstall windows-env winenv doctor init completion version help)' \
+  '2:scope:(user machine)' \
   '--json[print JSON]' \
   '--vendor[filter by vendor text]:vendor:' \
   '--shell[shell to emit]:shell:(bash zsh fish powershell cmd)' \
   '--global[write to shell profile]' \
   '--project[write project config]' \
   '--dry-run[preview changes]' \
+  '--all[all supported shell profiles]' \
   '--file[project config file]:file:_files'
 `
 }
 
 func fishCompletion() string {
 	return `complete -c javahome -f
-complete -c javahome -n "not __fish_seen_subcommand_from list ls current print use select activate doctor init completion version help" -a "list ls current print use select activate doctor init completion version help"
+complete -c javahome -n "not __fish_seen_subcommand_from list ls current print use select activate setup wizard uninstall windows-env winenv doctor init completion version help" -a "list ls current print use select activate setup wizard uninstall windows-env winenv doctor init completion version help"
+complete -c javahome -n "__fish_seen_subcommand_from windows-env winenv" -a "user machine"
 complete -c javahome -l json -d "print JSON"
 complete -c javahome -l vendor -r -d "filter by vendor text"
 complete -c javahome -l shell -r -a "bash zsh fish powershell cmd" -d "shell to emit"
 complete -c javahome -l global -d "write to shell profile"
 complete -c javahome -l project -d "write .javahome.toml"
 complete -c javahome -l dry-run -d "preview changes"
+complete -c javahome -l all -d "all supported shell profiles"
 complete -c javahome -l file -r -d "project config file"
 `
 }
@@ -294,9 +298,9 @@ complete -c javahome -l file -r -d "project config file"
 func powerShellCompletion() string {
 	return `Register-ArgumentCompleter -Native -CommandName javahome -ScriptBlock {
   param($wordToComplete, $commandAst, $cursorPosition)
-  $commands = 'list','ls','current','print','use','select','activate','doctor','init','completion','version','help'
-  $flags = '--json','--vendor','--shell','--global','--project','--dry-run','--file'
-  $values = 'bash','zsh','fish','powershell','cmd'
+  $commands = 'list','ls','current','print','use','select','activate','setup','wizard','uninstall','windows-env','winenv','doctor','init','completion','version','help'
+  $flags = '--json','--vendor','--shell','--global','--project','--dry-run','--file','--all'
+  $values = 'bash','zsh','fish','powershell','cmd','user','machine'
   ($commands + $flags + $values) | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
     [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
   }
