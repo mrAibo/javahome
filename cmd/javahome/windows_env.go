@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 
@@ -34,7 +35,7 @@ func cmdWindowsEnv(args []string) error {
 		return err
 	}
 
-	ui := termui.New(stdoutFile())
+	ui := termui.New(os.Stdout)
 	message, err := winenv.Apply(scope, inst.Path, *dryRun)
 	if err != nil {
 		if strings.TrimSpace(message) != "" {
@@ -56,5 +57,3 @@ func cmdWindowsEnv(args []string) error {
 	}
 	return nil
 }
-
-func stdoutFile() *os.File { return os.Stdout }
