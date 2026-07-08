@@ -18,7 +18,7 @@ import (
 	"github.com/mrAibo/javahome/internal/termui"
 )
 
-const version = "0.3.0"
+const version = "0.4.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -47,6 +47,10 @@ func run(args []string) error {
 		return cmdSelect(args[1:])
 	case "activate":
 		return cmdActivate(args[1:])
+	case "setup", "wizard":
+		return cmdSetup(args[1:])
+	case "uninstall":
+		return cmdUninstall(args[1:])
 	case "completion", "completions":
 		return cmdCompletion(args[1:])
 	case "doctor":
@@ -216,6 +220,7 @@ func cmdUse(args []string) error {
 		}
 		ui := termui.New(os.Stdout)
 		fmt.Printf("%s Updated %s\n", ui.Success("OK"), ui.Path(path))
+		fmt.Println(ui.Bullet("A timestamped backup is created before profile changes when the profile already exists."))
 		fmt.Println(ui.Bullet("Open a new shell or reload your profile to apply the change."))
 		return nil
 	}
@@ -334,6 +339,7 @@ func cmdInit(args []string) error {
 		}
 		ui := termui.New(os.Stdout)
 		fmt.Printf("%s Updated %s\n", ui.Success("OK"), ui.Path(path))
+		fmt.Println(ui.Bullet("A timestamped backup is created before profile changes when the profile already exists."))
 		return nil
 	}
 	fmt.Print(script)
@@ -463,6 +469,7 @@ func printHelp() {
 	fmt.Println("  javahome <command> [options]")
 	fmt.Println()
 	fmt.Println(ui.Bold("Most useful commands:"))
+	printHelpCommand(ui, "javahome setup", "Guided setup wizard")
 	printHelpCommand(ui, "javahome list", "List discovered JDKs")
 	printHelpCommand(ui, "javahome current", "Show active JAVA_HOME")
 	printHelpCommand(ui, "javahome doctor", "Diagnose JAVA_HOME, java, javac, and discovery")
@@ -470,6 +477,7 @@ func printHelp() {
 	printHelpCommand(ui, "javahome use 17", "Show activation instructions for your shell")
 	printHelpCommand(ui, "javahome select", "Choose a JDK interactively")
 	printHelpCommand(ui, "javahome activate", "Use .javahome.toml in this project")
+	printHelpCommand(ui, "javahome uninstall", "Remove javahome blocks from your profile")
 	fmt.Println()
 	fmt.Println(ui.Bold("Current-shell activation:"))
 	fmt.Println("  " + ui.Command(`eval "$(javahome use 17 --shell bash)"`))
@@ -478,10 +486,9 @@ func printHelp() {
 	fmt.Println("  " + ui.Command("javahome use 17 --shell powershell | Invoke-Expression"))
 	fmt.Println()
 	fmt.Println(ui.Bold("Permanent profile update:"))
+	fmt.Println("  " + ui.Command("javahome setup"))
 	fmt.Println("  " + ui.Command("javahome use 17 --global --shell bash"))
-	fmt.Println("  " + ui.Command("javahome use 17 --global --shell zsh"))
-	fmt.Println("  " + ui.Command("javahome use 17 --global --shell fish"))
-	fmt.Println("  " + ui.Command("javahome use 17 --global --shell powershell"))
+	fmt.Println("  " + ui.Command("javahome uninstall --shell bash"))
 	fmt.Println()
 	fmt.Println(ui.Bold("Project and automation:"))
 	printHelpCommand(ui, "javahome use 17 --project", "Write .javahome.toml")
@@ -490,6 +497,8 @@ func printHelp() {
 	printHelpCommand(ui, "javahome use 17 --global --dry-run", "Preview profile changes")
 	fmt.Println()
 	fmt.Println(ui.Bold("All commands:"))
+	fmt.Println("  javahome setup [--shell name] [--dry-run]")
+	fmt.Println("  javahome uninstall [--shell name|--all] [--dry-run]")
 	fmt.Println("  javahome list [--json]")
 	fmt.Println("  javahome current [--json]")
 	fmt.Println("  javahome print [version] [--vendor text] [--json]")
@@ -506,6 +515,9 @@ func printHelp() {
 	fmt.Println(ui.Bold("Color:"))
 	fmt.Println("  Auto-enabled for supported terminals. Disable with NO_COLOR=1 or JAVAHOME_COLOR=never.")
 	fmt.Println("  Force colors with JAVAHOME_COLOR=always.")
+	fmt.Println()
+	fmt.Println(ui.Bold("Safety:"))
+	fmt.Println("  Profile edits create timestamped .javahome-backup-* files when a profile exists.")
 	fmt.Println()
 	fmt.Println(ui.Bold("Notes:"))
 	fmt.Println("  An external process cannot directly change the already-running parent shell.")
