@@ -18,7 +18,7 @@ import (
 	"github.com/mrAibo/javahome/internal/termui"
 )
 
-const version = "0.5.0"
+const version = "0.5.1"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -179,66 +179,13 @@ func cmdUse(args []string) error {
 	if fs.NArg() == 0 {
 		return errors.New("usage: javahome use <major-version> [--vendor text] [--shell bash|zsh|fish|powershell|cmd] [--global|--project|--dry-run]")
 	}
-	versionArg := fs.Arg(0)
 
+	versionArg := fs.Arg(0)
 	inst, err := selectInstallation(versionArg, *vendor)
 	if err != nil {
 		return err
 	}
-	shell, err := shellenv.ParseShell(*shellName)
-	if err != nil {
-		return err
-	}
-	newPath := shellenv.CleanPathForJava(os.Getenv("PATH"), inst.Path)
-	script := shellenv.ActivationScript(shell, inst.Path, newPath)
-
-	if *project {
-		content := projectConfig(inst, *vendor)
-		if *dryRun {
-			fmt.Print(content)
-			return nil
-		}
-		if err := os.WriteFile(".javahome.toml", []byte(content), 0o644); err != nil {
-			return err
-		}
-		ui := termui.New(os.Stdout)
-		fmt.Printf("%s Wrote %s for Java %d\n", ui.Success("OK"), ui.Path(".javahome.toml"), inst.Major)
-		return nil
-	}
-
-	if *global {
-		path, err := shellenv.ProfilePath(shell)
-		if err != nil {
-			return err
-		}
-		block := "# >>> javahome >>>\n" + strings.TrimRight(script, "\n") + "\n# <<< javahome <<<\n"
-		if *dryRun {
-			ui := termui.New(os.Stdout)
-			fmt.Printf("%s %s with:\n\n%s", ui.Warning("Would update"), ui.Path(path), block)
-			return nil
-		}
-		if err := shellenv.UpsertMarkedBlock(path, block); err != nil {
-			return err
-		}
-		ui := termui.New(os.Stdout)
-		fmt.Printf("%s Updated %s\n", ui.Success("OK"), ui.Path(path))
-		fmt.Println(ui.Bullet("A timestamped backup is created before profile changes when the profile already exists."))
-		fmt.Println(ui.Bullet("Open a new shell or reload your profile to apply the change."))
-		return nil
-	}
-
-	if *shellName != "" {
-		fmt.Print(script)
-		return nil
-	}
-
-	ui := termui.New(os.Stdout)
-	fmt.Printf("%s Selected Java %s: %s\n", ui.Success("OK"), strconv.Itoa(inst.Major), ui.Path(inst.Path))
-	fmt.Println()
-	fmt.Printf("%s\n  %s\n", ui.Bold("For the current shell, run:"), ui.Command(activationCommand(versionArg, shell)))
-	fmt.Println()
-	fmt.Printf("%s\n  %s\n", ui.Bold("To make it permanent, run:"), ui.Command(fmt.Sprintf("javahome use %s --global --shell %s", versionArg, shell)))
-	return nil
+	return applyInstallation(inst, versionArg, *vendor, *shellName, *global, *project, *dryRun, true)
 }
 
 func cmdDoctor(args []string) error {
@@ -324,26 +271,10 @@ func cmdInit(args []string) error {
 	if err != nil {
 		return err
 	}
-	script := shellenv.InitScript(shell)
 	if *global {
-		path, err := shellenv.ProfilePath(shell)
-		if err != nil {
-			return err
-		}
-		if *dryRun {
-			ui := termui.New(os.Stdout)
-			fmt.Printf("%s %s with:\n\n%s", ui.Warning("Would update"), ui.Path(path), script)
-			return nil
-		}
-		if err := shellenv.UpsertMarkedBlock(path, script); err != nil {
-			return err
-		}
-		ui := termui.New(os.Stdout)
-		fmt.Printf("%s Updated %s\n", ui.Success("OK"), ui.Path(path))
-		fmt.Println(ui.Bullet("A timestamped backup is created before profile changes when the profile already exists."))
-		return nil
+		return installHelper(shell, *dryRun)
 	}
-	fmt.Print(script)
+	fmt.Print(shellenv.InitScript(shell))
 	return nil
 }
 
