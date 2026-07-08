@@ -70,17 +70,17 @@ func powerShellExecutable() (string, error) {
 }
 
 func windowsEnvScript() string {
-	return `$ErrorActionPreference = 'Stop'
-param(
+	return `param(
   [Parameter(Mandatory=$true)][string]$JavaHome,
   [Parameter(Mandatory=$true)][ValidateSet('User','Machine')][string]$Scope
 )
+$ErrorActionPreference = 'Stop'
 
 $javaBin = Join-Path $JavaHome 'bin'
 $currentPath = [Environment]::GetEnvironmentVariable('Path', $Scope)
 if ($null -eq $currentPath) { $currentPath = '' }
 
-$seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+$seen = @{}
 $parts = New-Object 'System.Collections.Generic.List[string]'
 
 function Add-PathPart([string]$Value) {
@@ -88,10 +88,14 @@ function Add-PathPart([string]$Value) {
   $trimmed = $Value.Trim()
   if ($trimmed -eq $javaBin) { return }
   if ($trimmed -match '(?i)\\(jre|jdk|java)[^\\;]*\\bin$') { return }
-  if ($seen.Add($trimmed)) { [void]$parts.Add($trimmed) }
+  $key = $trimmed.ToLowerInvariant()
+  if (-not $seen.ContainsKey($key)) {
+    $seen[$key] = $true
+    [void]$parts.Add($trimmed)
+  }
 }
 
-[void]$seen.Add($javaBin)
+$seen[$javaBin.ToLowerInvariant()] = $true
 [void]$parts.Add($javaBin)
 foreach ($part in ($currentPath -split ';')) { Add-PathPart $part }
 $newPath = ($parts -join ';')
