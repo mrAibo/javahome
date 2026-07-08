@@ -58,21 +58,8 @@ func cmdSetup(args []string) error {
 		return err
 	}
 
-	versionArg := strconv.Itoa(inst.Major)
-	shellArg := string(shell)
-	switch mode {
-	case 1:
-		if err := applyInstallation(inst, versionArg, "", shellArg, false, false, *dryRun, true); err != nil {
-			return err
-		}
-	case 2:
-		if err := applyInstallation(inst, versionArg, "", shellArg, true, false, *dryRun, true); err != nil {
-			return err
-		}
-	case 3:
-		if err := applyInstallation(inst, versionArg, "", shellArg, false, true, *dryRun, true); err != nil {
-			return err
-		}
+	if err := applyInstallation(inst, strconv.Itoa(inst.Major), "", string(shell), mode == 2, mode == 3, *dryRun, true); err != nil {
+		return err
 	}
 
 	if shell != shellenv.Cmd && promptYesNo(reader, "Install the short jhome helper?", mode == 2) {
@@ -154,19 +141,11 @@ func promptInstallation(reader *bufio.Reader, ui termui.UI, installs []javaenv.I
 		}
 		fmt.Printf("%2d) %s Java %-3d %-18s %s\n", i+1, current, inst.Major, emptyDash(inst.Vendor), ui.Path(inst.Path))
 	}
-	choice, err := promptChoice(reader, "Enter number", installLabels(installs), 1)
+	choice, err := promptNumber(reader, "Choice", len(installs), 1)
 	if err != nil {
 		return javaenv.Installation{}, err
 	}
 	return installs[choice-1], nil
-}
-
-func installLabels(installs []javaenv.Installation) []string {
-	labels := make([]string, len(installs))
-	for i, inst := range installs {
-		labels[i] = fmt.Sprintf("Java %d %s", inst.Major, inst.Path)
-	}
-	return labels
 }
 
 func promptShell(reader *bufio.Reader) (shellenv.Shell, error) {
@@ -194,21 +173,35 @@ func promptChoice(reader *bufio.Reader, prompt string, options []string, default
 			}
 			fmt.Printf("  %d) %s%s\n", i+1, option, defaultMark)
 		}
-		fmt.Printf("Choice [%d]: ", defaultIndex)
-		line, err := reader.ReadString('\n')
-		if err != nil && strings.TrimSpace(line) == "" {
-			return 0, err
-		}
-		value := strings.TrimSpace(line)
-		if value == "" {
-			return defaultIndex, nil
-		}
-		choice, err := strconv.Atoi(value)
-		if err == nil && choice >= 1 && choice <= len(options) {
+		choice, err := promptNumber(reader, "Choice", len(options), defaultIndex)
+		if err == nil {
 			return choice, nil
 		}
-		fmt.Printf("Invalid choice %q. Please enter 1-%d.\n", value, len(options))
+		fmt.Println(err)
 	}
+}
+
+func promptNumber(reader *bufio.Reader, prompt string, max int, defaultIndex int) (int, error) {
+	if max < 1 {
+		return 0, errors.New("no choices available")
+	}
+	if defaultIndex < 1 || defaultIndex > max {
+		defaultIndex = 1
+	}
+	fmt.Printf("%s [%d]: ", prompt, defaultIndex)
+	line, err := reader.ReadString('\n')
+	if err != nil && strings.TrimSpace(line) == "" {
+		return 0, err
+	}
+	value := strings.TrimSpace(line)
+	if value == "" {
+		return defaultIndex, nil
+	}
+	choice, err := strconv.Atoi(value)
+	if err != nil || choice < 1 || choice > max {
+		return 0, fmt.Errorf("invalid choice %q. Please enter 1-%d.", value, max)
+	}
+	return choice, nil
 }
 
 func promptYesNo(reader *bufio.Reader, question string, defaultYes bool) bool {
