@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type Shell string
@@ -68,15 +69,15 @@ func ActivationScript(shell Shell, javaHome string, pathValue string) string {
 func InitScript(shell Shell) string {
 	switch shell {
 	case Fish:
-		return "# >>> javahome >>>\nfunction jhome\n    javahome use $argv --shell fish | source\nend\n# <<< javahome <<<\n"
+		return "# >>> javahome helper >>>\nfunction jhome\n    javahome use $argv --shell fish | source\nend\n# <<< javahome helper <<<\n"
 	case PowerShell:
-		return "# >>> javahome >>>\nfunction jhome { javahome use @args --shell powershell | Invoke-Expression }\n# <<< javahome <<<\n"
+		return "# >>> javahome helper >>>\nfunction jhome { javahome use @args --shell powershell | Invoke-Expression }\n# <<< javahome helper <<<\n"
 	case Cmd:
 		return ":: cmd.exe cannot safely eval command output. Use: javahome use 17 --global --shell cmd\n"
 	case Zsh:
-		return "# >>> javahome >>>\njhome() { eval \"$(javahome use \"$@\" --shell zsh)\"; }\n# <<< javahome <<<\n"
+		return "# >>> javahome helper >>>\njhome() { eval \"$(javahome use \"$@\" --shell zsh)\"; }\n# <<< javahome helper <<<\n"
 	default:
-		return "# >>> javahome >>>\njhome() { eval \"$(javahome use \"$@\" --shell bash)\"; }\n# <<< javahome <<<\n"
+		return "# >>> javahome helper >>>\njhome() { eval \"$(javahome use \"$@\" --shell bash)\"; }\n# <<< javahome helper <<<\n"
 	}
 }
 
@@ -107,8 +108,7 @@ func ProfilePath(shell Shell) (string, error) {
 }
 
 func UpsertMarkedBlock(path string, block string) error {
-	const start = "# >>> javahome >>>"
-	const end = "# <<< javahome <<<"
+	start, end := blockMarkers(block)
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -120,21 +120,134 @@ func UpsertMarkedBlock(path string, block string) error {
 
 	startIdx := strings.Index(existing, start)
 	endIdx := strings.Index(existing, end)
+	updated := existing
 	if startIdx >= 0 && endIdx > startIdx {
 		endIdx += len(end)
 		replacement := strings.TrimRight(block, "\n")
-		updated := existing[:startIdx] + replacement + existing[endIdx:]
-		return os.WriteFile(path, []byte(updated), 0o644)
+		updated = existing[:startIdx] + replacement + existing[endIdx:]
+	} else {
+		if strings.TrimSpace(updated) != "" && !strings.HasSuffix(updated, "\n") {
+			updated += "\n"
+		}
+		if strings.TrimSpace(updated) != "" {
+			updated += "\n"
+		}
+		updated += block
 	}
 
-	if strings.TrimSpace(existing) != "" && !strings.HasSuffix(existing, "\n") {
-		existing += "\n"
+	if updated == existing {
+		return nil
 	}
-	if strings.TrimSpace(existing) != "" {
-		existing += "\n"
+	if _, err := BackupFile(path); err != nil {
+		return err
 	}
-	existing += block
-	return os.WriteFile(path, []byte(existing), 0o644)
+	return os.WriteFile(path, []byte(updated), 0o644)
+}
+
+func RemoveJavahomeBlocks(path string) (int, string, error) {
+	existingBytes, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, "", nil
+		}
+		return 0, "", err
+	}
+	existing := string(existingBytes)
+	lines := strings.SplitAfter(existing, "\n")
+	out := make([]string, 0, len(lines))
+	inBlock := false
+	removed := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if isJavahomeStartMarker(trimmed) {
+			inBlock = true
+			removed++
+			continue
+		}
+		if inBlock {
+			if isJavahomeEndMarker(trimmed) {
+				inBlock = false
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	if removed == 0 {
+		return 0, "", nil
+	}
+	updated := strings.Join(out, "")
+	backup, err := BackupFile(path)
+	if err != nil {
+		return 0, "", err
+	}
+	return removed, backup, os.WriteFile(path, []byte(updated), 0o644)
+}
+
+func WriteFileWithBackup(path string, data []byte, perm os.FileMode) (string, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	backup, err := BackupFile(path)
+	if err != nil {
+		return "", err
+	}
+	return backup, os.WriteFile(path, data, perm)
+}
+
+func BackupFile(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("cannot back up directory %s", path)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	stamp := time.Now().Format("20060102-150405")
+	backup := path + ".javahome-backup-" + stamp
+	for i := 0; i < 1000; i++ {
+		candidate := backup
+		if i > 0 {
+			candidate = fmt.Sprintf("%s-%03d", backup, i)
+		}
+		_, err := os.Stat(candidate)
+		if os.IsNotExist(err) {
+			return candidate, os.WriteFile(candidate, content, info.Mode().Perm())
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return "", fmt.Errorf("could not create unique backup for %s", path)
+}
+
+func blockMarkers(block string) (string, string) {
+	start := "# >>> javahome >>>"
+	end := "# <<< javahome <<<"
+	for _, line := range strings.Split(block, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.Contains(trimmed, ">>> javahome") {
+			start = trimmed
+		}
+		if strings.Contains(trimmed, "<<< javahome") {
+			end = trimmed
+		}
+	}
+	return start, end
+}
+
+func isJavahomeStartMarker(line string) bool {
+	return strings.Contains(line, ">>> javahome")
+}
+
+func isJavahomeEndMarker(line string) bool {
+	return strings.Contains(line, "<<< javahome")
 }
 
 func shQuote(value string) string {
