@@ -18,7 +18,7 @@ import (
 	"github.com/mrAibo/javahome/internal/termui"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -51,6 +51,8 @@ func run(args []string) error {
 		return cmdSetup(args[1:])
 	case "uninstall":
 		return cmdUninstall(args[1:])
+	case "windows-env", "winenv":
+		return cmdWindowsEnv(args[1:])
 	case "completion", "completions":
 		return cmdCompletion(args[1:])
 	case "doctor":
@@ -226,7 +228,6 @@ func cmdUse(args []string) error {
 	}
 
 	if *shellName != "" {
-		// This output is intended to be evaluated by a shell. Never add color here.
 		fmt.Print(script)
 		return nil
 	}
@@ -234,7 +235,7 @@ func cmdUse(args []string) error {
 	ui := termui.New(os.Stdout)
 	fmt.Printf("%s Selected Java %s: %s\n", ui.Success("OK"), strconv.Itoa(inst.Major), ui.Path(inst.Path))
 	fmt.Println()
-	fmt.Printf("%s\n  %s\n", ui.Bold("For the current shell, run:"), ui.Command(fmt.Sprintf("eval \"$(javahome use %s --shell %s)\"", versionArg, shell)))
+	fmt.Printf("%s\n  %s\n", ui.Bold("For the current shell, run:"), ui.Command(activationCommand(versionArg, shell)))
 	fmt.Println()
 	fmt.Printf("%s\n  %s\n", ui.Bold("To make it permanent, run:"), ui.Command(fmt.Sprintf("javahome use %s --global --shell %s", versionArg, shell)))
 	return nil
@@ -454,7 +455,7 @@ func emptyDash(value string) string {
 }
 
 func printHelpCommand(ui termui.UI, command string, description string) {
-	spaces := 38 - len(command)
+	spaces := 42 - len(command)
 	if spaces < 1 {
 		spaces = 1
 	}
@@ -463,38 +464,23 @@ func printHelpCommand(ui termui.UI, command string, description string) {
 
 func printHelp() {
 	ui := termui.New(os.Stdout)
+	shell := shellenv.DetectShell()
 	fmt.Println(ui.Bold("javahome "+version) + " - " + ui.Cyan("switch Java versions without fragile shell hacks"))
+	fmt.Printf("%s %s / %s\n", ui.Bold("Detected:"), runtime.GOOS, shell)
 	fmt.Println()
 	fmt.Println(ui.Bold("Usage:"))
 	fmt.Println("  javahome <command> [options]")
 	fmt.Println()
-	fmt.Println(ui.Bold("Most useful commands:"))
+	fmt.Println(ui.Bold("Common commands:"))
 	printHelpCommand(ui, "javahome setup", "Guided setup wizard")
 	printHelpCommand(ui, "javahome list", "List discovered JDKs")
 	printHelpCommand(ui, "javahome current", "Show active JAVA_HOME")
-	printHelpCommand(ui, "javahome doctor", "Diagnose JAVA_HOME, java, javac, and discovery")
+	printHelpCommand(ui, "javahome doctor", "Diagnose Java and PATH issues")
+	printHelpCommand(ui, "javahome select", "Choose a JDK from a numbered list")
 	printHelpCommand(ui, "javahome print 17", "Print the path for Java 17")
-	printHelpCommand(ui, "javahome use 17", "Show activation instructions for your shell")
-	printHelpCommand(ui, "javahome select", "Choose a JDK interactively")
-	printHelpCommand(ui, "javahome activate", "Use .javahome.toml in this project")
-	printHelpCommand(ui, "javahome uninstall", "Remove javahome blocks from your profile")
+	printHelpCommand(ui, "javahome uninstall", "Remove javahome blocks from profile files")
 	fmt.Println()
-	fmt.Println(ui.Bold("Current-shell activation:"))
-	fmt.Println("  " + ui.Command(`eval "$(javahome use 17 --shell bash)"`))
-	fmt.Println("  " + ui.Command(`eval "$(javahome use 17 --shell zsh)"`))
-	fmt.Println("  " + ui.Command("javahome use 17 --shell fish | source"))
-	fmt.Println("  " + ui.Command("javahome use 17 --shell powershell | Invoke-Expression"))
-	fmt.Println()
-	fmt.Println(ui.Bold("Permanent profile update:"))
-	fmt.Println("  " + ui.Command("javahome setup"))
-	fmt.Println("  " + ui.Command("javahome use 17 --global --shell bash"))
-	fmt.Println("  " + ui.Command("javahome uninstall --shell bash"))
-	fmt.Println()
-	fmt.Println(ui.Bold("Project and automation:"))
-	printHelpCommand(ui, "javahome use 17 --project", "Write .javahome.toml")
-	printHelpCommand(ui, "javahome activate --shell bash", "Emit project activation snippet")
-	printHelpCommand(ui, "javahome list --json", "JSON output for scripts")
-	printHelpCommand(ui, "javahome use 17 --global --dry-run", "Preview profile changes")
+	printPlatformHelp(ui, shell)
 	fmt.Println()
 	fmt.Println(ui.Bold("All commands:"))
 	fmt.Println("  javahome setup [--shell name] [--dry-run]")
@@ -508,19 +494,58 @@ func printHelp() {
 	fmt.Println("  javahome select [--vendor text] [--shell name] [--global|--project]")
 	fmt.Println("  javahome activate [--file .javahome.toml] [--shell name|--global]")
 	fmt.Println("  javahome completion bash|zsh|fish|powershell")
+	if runtime.GOOS == "windows" {
+		fmt.Println("  javahome windows-env user|machine <version> [--vendor text] [--dry-run]")
+	}
 	fmt.Println("  javahome doctor [--json]")
 	fmt.Println("  javahome init [bash|zsh|fish|powershell] [--global]")
 	fmt.Println("  javahome version")
 	fmt.Println()
-	fmt.Println(ui.Bold("Color:"))
-	fmt.Println("  Auto-enabled for supported terminals. Disable with NO_COLOR=1 or JAVAHOME_COLOR=never.")
-	fmt.Println("  Force colors with JAVAHOME_COLOR=always.")
-	fmt.Println()
 	fmt.Println(ui.Bold("Safety:"))
 	fmt.Println("  Profile edits create timestamped .javahome-backup-* files when a profile exists.")
-	fmt.Println()
-	fmt.Println(ui.Bold("Notes:"))
-	fmt.Println("  An external process cannot directly change the already-running parent shell.")
-	fmt.Println("  Use eval/source/Invoke-Expression for current-shell activation, or --global")
-	fmt.Println("  for profile updates.")
+	fmt.Println("  Shell activation output is never colorized, so eval/source/Invoke-Expression stays safe.")
+}
+
+func printPlatformHelp(ui termui.UI, shell shellenv.Shell) {
+	switch runtime.GOOS {
+	case "windows":
+		fmt.Println(ui.Bold("Windows / PowerShell examples:"))
+		fmt.Println("  " + ui.Command("javahome use 17 --shell powershell | Invoke-Expression"))
+		fmt.Println("  " + ui.Command("javahome use 17 --global --shell powershell"))
+		fmt.Println("  " + ui.Command("javahome windows-env user 17"))
+		fmt.Println("  " + ui.Command("javahome windows-env machine 17"))
+		fmt.Println("  " + ui.Command("javahome setup --shell powershell"))
+		fmt.Println()
+		fmt.Println(ui.Bold("Windows note:"))
+		fmt.Println("  Current PowerShell changes are immediate. Persisted Windows user/machine")
+		fmt.Println("  environment changes affect new processes. Restart terminals, IDEs, daemons,")
+		fmt.Println("  or services that were already running. Machine scope usually needs Admin.")
+	case "darwin":
+		fmt.Println(ui.Bold("macOS examples:"))
+		fmt.Println("  " + ui.Command("eval \"$(javahome use 17 --shell zsh)\""))
+		fmt.Println("  " + ui.Command("javahome use 17 --global --shell zsh"))
+		fmt.Println("  " + ui.Command("javahome activate --shell zsh"))
+		fmt.Println("  " + ui.Command("javahome setup --shell zsh"))
+		fmt.Println()
+		fmt.Println(ui.Bold("macOS discovery:"))
+		fmt.Println("  Uses /usr/libexec/java_home -V plus common JDK, Homebrew, SDKMAN, asdf, and mise paths.")
+	default:
+		fmt.Println(ui.Bold("Linux examples:"))
+		switch shell {
+		case shellenv.Fish:
+			fmt.Println("  " + ui.Command("javahome use 17 --shell fish | source"))
+			fmt.Println("  " + ui.Command("javahome use 17 --global --shell fish"))
+		case shellenv.Zsh:
+			fmt.Println("  " + ui.Command("eval \"$(javahome use 17 --shell zsh)\""))
+			fmt.Println("  " + ui.Command("javahome use 17 --global --shell zsh"))
+		default:
+			fmt.Println("  " + ui.Command("eval \"$(javahome use 17 --shell bash)\""))
+			fmt.Println("  " + ui.Command("javahome use 17 --global --shell bash"))
+		}
+		fmt.Println("  " + ui.Command("javahome setup"))
+		fmt.Println("  " + ui.Command("JAVA_HOME=\"$(javahome print 17)\""))
+		fmt.Println()
+		fmt.Println(ui.Bold("Linux discovery:"))
+		fmt.Println("  Uses update-alternatives, update-java-alternatives, /usr/lib/jvm, /opt, SDKMAN, asdf, and mise paths.")
+	}
 }
